@@ -122,7 +122,7 @@ def call(body) {
         if (fileExists('Dockerfile')) {
           stage ('Docker Build') {
             container ('docker') {
-              sh "docker build -t ${image}:${gitCommit} ."
+              sh "docker build --pull=true -t ${image}:${gitCommit} ."
               if (registry) { 
                 if (!registry.endsWith('/')) {
                   registry = "${registry}/"
