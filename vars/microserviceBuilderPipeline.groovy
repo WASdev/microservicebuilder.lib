@@ -52,6 +52,7 @@ def call(body) {
   def docker = (config.dockerImage == null) ? 'docker' : config.dockerImage
   def kubectl = (config.kubectlImage == null) ? 'lachlanevenson/k8s-kubectl:v1.6.0' : config.kubectlImage
   def helm = (config.helmImage == null) ? 'lachlanevenson/k8s-helm:v2.4.1' : config.helmImage
+  def istioctl = (config.istioctlImage == null) ? ''alexanderowenmeehanibm/istioctl' : config.istioctlImage
   def mvnCommands = (config.mvnCommands == null) ? 'clean package' : config.mvnCommands
   def registry = System.getenv("REGISTRY").trim()
   def registrySecret = System.getenv("REGISTRY_SECRET").trim()
@@ -99,7 +100,7 @@ def call(body) {
         ]),
       containerTemplate(name: 'kubectl', image: kubectl, ttyEnabled: true, command: 'cat'),
       containerTemplate(name: 'helm', image: helm, ttyEnabled: true, command: 'cat'),
-      containerTemplate(name: 'istioctl', image: alexanderowenmeehanibm/istioctl, ttyEnabled: true, command: 'cat')
+      containerTemplate(name: 'istioctl', image: 'alexanderowenmeehanibm/istioctl', ttyEnabled: true, command: 'cat')
     ],
     volumes: volumes
   ){
