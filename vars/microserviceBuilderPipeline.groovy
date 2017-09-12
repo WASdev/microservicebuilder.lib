@@ -59,12 +59,12 @@ def call(body) {
   def deploy = (config.deploy ?: System.getenv ("DEPLOY")).trim().toLowerCase() == 'true'
   def namespace = config.namespace ?: (System.getenv("NAMESPACE") ?: "").trim()
 
-  // these options were all added later. Helm chart may not have the associated properties set. 
+  // these options were all added later. Helm chart may not have the associated properties set.
   def test = (config.test ?: (System.getenv ("TEST") ?: "false").trim()).toLowerCase() == 'true'
   def debug = (config.debug ?: (System.getenv ("DEBUG") ?: "false").trim()).toLowerCase() == 'true'
   def deployBranch = config.deployBranch ?: ((System.getenv("DEFAULT_DEPLOY_BRANCH") ?: "").trim() ?: 'master')
   // will need to check later if user provided chartFolder location
-  def userSpecifiedChartFolder = config.chartFolder 
+  def userSpecifiedChartFolder = config.chartFolder
   def chartFolder = userSpecifiedChartFolder ?: ((System.getenv("CHART_FOLDER") ?: "").trim() ?: 'chart')
   def manifestFolder = config.manifestFolder ?: ((System.getenv("MANIFEST_FOLDER") ?: "").trim() ?: 'manifests')
 
@@ -72,8 +72,8 @@ def call(body) {
   deploy=${deploy} deployBranch=${deployBranch} test=${test} debug=${debug} namespace=${namespace} \
   chartFolder=${chartFolder} manifestFolder=${manifestFolder}"
 
-  // We won't be able to get hold of registrySecret if Jenkins is running in a non-default namespace that is not the deployment namespace. 
-  // In that case we'll need the registrySecret to have been ported over, perhaps during pipeline install. 
+  // We won't be able to get hold of registrySecret if Jenkins is running in a non-default namespace that is not the deployment namespace.
+  // In that case we'll need the registrySecret to have been ported over, perhaps during pipeline install.
 
   // Only mount registry secret if it's present
   def volumes = [ hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock') ]
@@ -99,6 +99,7 @@ def call(body) {
         ]),
       containerTemplate(name: 'kubectl', image: kubectl, ttyEnabled: true, command: 'cat'),
       containerTemplate(name: 'helm', image: helm, ttyEnabled: true, command: 'cat'),
+      containerTemplate(name: 'istioctl', image: alexanderowenmeehanibm/istioctl, ttyEnabled: true, command: 'cat')
     ],
     volumes: volumes
   ){
@@ -123,11 +124,11 @@ def call(body) {
           stage ('Docker Build') {
             container ('docker') {
               sh "docker build -t ${image}:${gitCommit} ."
-              if (registry) { 
+              if (registry) {
                 if (!registry.endsWith('/')) {
                   registry = "${registry}/"
                 }
-                if (registrySecret) { 
+                if (registrySecret) {
                   sh "ln -s /msb_reg_sec/.dockercfg /home/jenkins/.dockercfg"
                 }
                 sh "docker tag ${image}:${gitCommit} ${registry}${image}:${gitCommit}"
@@ -152,11 +153,11 @@ def call(body) {
           container ('kubectl') {
             sh "kubectl create namespace ${testNamespace}"
             sh "kubectl label namespace ${testNamespace} test=true"
-            if (registrySecret) { 
+            if (registrySecret) {
               giveRegistryAccessToNamespace (testNamespace, registrySecret)
             }
           }
-          // We're moving to Helm-only deployments. Use Helm to install a deployment to test against. 
+          // We're moving to Helm-only deployments. Use Helm to install a deployment to test against.
           container ('helm') {
             sh "helm init --client-only"
             sh "helm install ${realChartFolder} --set test=true --namespace ${testNamespace} --name ${tempHelmRelease} --wait"
@@ -171,7 +172,7 @@ def call(body) {
               if (!debug) {
                 container ('kubectl') {
                   sh "kubectl delete namespace ${testNamespace}"
-                  if (fileExists(realChartFolder)) { 
+                  if (fileExists(realChartFolder)) {
 		    container ('helm') {
                       sh "helm delete ${tempHelmRelease} --purge"
 		    }
@@ -188,11 +189,19 @@ def call(body) {
           deployProject (realChartFolder, image, namespace, manifestFolder)
         }
       }
+      if (fileExists('istio.yaml')) {
+        container ('istioctl') {
+          String installCheck = sh (script: "istioctl replace -f istio.yaml", returnStdout: true).trim()
+          if (installCheck.contains("not found")) {
+            sh "istioctl create -f istio.yaml"
+          }
+        }
+      }
     }
   }
 }
 
-def deployProject (String chartFolder, String image, String namespace, String manifestFolder) { 
+def deployProject (String chartFolder, String image, String namespace, String manifestFolder) {
   if (chartFolder != null && fileExists(chartFolder)) {
     container ('helm') {
       sh "helm init --client-only"
@@ -209,16 +218,16 @@ def deployProject (String chartFolder, String image, String namespace, String ma
   }
 }
 
-/* 
-  We have a (temporary) namespace that we want to grant CfC registry access to. 
+/*
+  We have a (temporary) namespace that we want to grant CfC registry access to.
   String namespace: target namespace
   String registrySecret: secret in Jenkins' namespace to use
 
   1. Port registrySecret into namespace
-  2. Modify 'default' serviceaccount to use ported registrySecret. 
+  2. Modify 'default' serviceaccount to use ported registrySecret.
 */
 
-def giveRegistryAccessToNamespace (String namespace, String registrySecret) { 
+def giveRegistryAccessToNamespace (String namespace, String registrySecret) {
   String secretScript = "kubectl get secret/${registrySecret} -o jsonpath=\"{.data.\\.dockercfg}\""
   String secret = sh (script: secretScript, returnStdout: true).trim()
   String yaml = """
@@ -234,10 +243,10 @@ def giveRegistryAccessToNamespace (String namespace, String registrySecret) {
 
   String sa = sh (script: "kubectl get sa default -o json --namespace ${namespace}", returnStdout: true).trim()
   /*
-      Use JsonSlurperClassic because JsonSlurper is not thread safe, not serializable, and not good to use in Jenkins jobs. 
+      Use JsonSlurperClassic because JsonSlurper is not thread safe, not serializable, and not good to use in Jenkins jobs.
       See https://stackoverflow.com/questions/37864542/jenkins-pipeline-notserializableexception-groovy-json-internal-lazymap
   */
-  def map = new JsonSlurperClassic().parseText (sa) 
+  def map = new JsonSlurperClassic().parseText (sa)
   map.metadata.remove ('resourceVersion')
   map.put ('imagePullSecrets', [['name': registrySecret]])
   def json = JsonOutput.prettyPrint(JsonOutput.toJson(map))
@@ -245,8 +254,8 @@ def giveRegistryAccessToNamespace (String namespace, String registrySecret) {
   sh "kubectl replace sa default --namespace ${namespace} -f temp.json"
 }
 
-def getChartFolder(String userSpecified, String currentChartFolder) {  
-  
+def getChartFolder(String userSpecified, String currentChartFolder) {
+
   def newChartLocation = ""
   if (userSpecified) {
     print "User defined chart location specified: ${userSpecified}"
@@ -307,4 +316,3 @@ def getChartFolder(String userSpecified, String currentChartFolder) {
       }
     }
 }
-
