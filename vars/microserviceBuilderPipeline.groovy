@@ -193,6 +193,7 @@ def call(body) {
       if (fileExists('istio.yaml')) {
         container ('istioctl') {
           String installCheck = sh (script: "istioctl replace -f istio.yaml", returnStdout: true).trim()
+          print "installCheck = ${installCheck}"
           if (installCheck.contains("not found")) {
             sh "istioctl create -f istio.yaml"
           }
