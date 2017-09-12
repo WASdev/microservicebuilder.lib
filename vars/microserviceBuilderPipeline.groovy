@@ -200,6 +200,7 @@ def call(body) {
             }
           } catch (Exception x) {
               print "caught Exception ${x}"
+              print "Throwable.getCause()"
           } finally {
               print "Finally Block"
           }
