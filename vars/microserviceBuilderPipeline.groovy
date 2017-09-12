@@ -193,16 +193,9 @@ def call(body) {
       if (fileExists('istio.yaml')) {
         container ('istioctl') {
           try {
-            String installCheck = sh (script: "istioctl replace -f istio.yaml", returnStdout: true).trim()
-            print "installCheck = ${installCheck}"
-            if (installCheck.contains("not found")) {
-              sh "istioctl create -f istio.yaml"
-            }
+            sh (script: "istioctl replace -f istio.yaml", returnStdout: true).trim()
           } catch (Exception x) {
-              print "caught Exception ${x}"
-              print "Throwable.getCause()"
-          } finally {
-              print "Finally Block"
+            sh "istioctl create -f istio.yaml"
           }
         }
       }
