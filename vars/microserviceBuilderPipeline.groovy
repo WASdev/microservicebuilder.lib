@@ -167,6 +167,9 @@ def call(body) {
             sh "helm init --client-only"
             sh "helm install ${realChartFolder} --set test=true --namespace ${testNamespace} --name ${tempHelmRelease} --wait"
 	    sh "kubectl get all --namespace ${testNamespace}"
+	    sh "sleep 10"
+	    sh "echo Testingagain"
+	    sh "kubectl get all --namespace ${testNamespace}"
           }
 
           container ('maven') {
