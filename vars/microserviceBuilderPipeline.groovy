@@ -166,6 +166,7 @@ def call(body) {
           container ('helm') {
             sh "helm init --client-only"
             sh "helm install ${realChartFolder} --set test=true --namespace ${testNamespace} --name ${tempHelmRelease} --wait"
+	    sh "kubectl get all --namespace ${testNamespace}"
           }
 
           container ('maven') {
@@ -174,6 +175,7 @@ def call(body) {
             } finally {
               step([$class: 'JUnitResultArchiver', allowEmptyResults: true, testResults: '**/target/failsafe-reports/*.xml'])
               step([$class: 'ArtifactArchiver', artifacts: '**/target/failsafe-reports/*.txt', allowEmptyArchive: true])
+	      sh "kubectl get all --namespace ${testNamespace}"
               if (!debug) {
                 container ('kubectl') {
                   sh "kubectl delete namespace ${testNamespace}"
