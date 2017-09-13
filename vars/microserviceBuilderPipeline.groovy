@@ -122,7 +122,7 @@ def call(body) {
         if (fileExists('Dockerfile')) {
           stage ('Docker Build') {
             container ('docker') {
-              sh "docker build -t ${image}:${gitCommit} ."
+              sh "docker build --pull=true -t ${image}:${gitCommit} ."
               if (registry) { 
                 if (!registry.endsWith('/')) {
                   registry = "${registry}/"
@@ -166,6 +166,8 @@ def call(body) {
           container ('helm') {
             sh "helm init --client-only"
             sh "helm install ${realChartFolder} --set test=true --namespace ${testNamespace} --name ${tempHelmRelease} --wait"
+	    sh "sleep 10"
+	    sh "kubectl get all --namespace ${testNamespace}"
           }
 
           container ('maven') {
