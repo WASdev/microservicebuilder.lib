@@ -100,7 +100,7 @@ def call(body) {
         ]),
       containerTemplate(name: 'kubectl', image: kubectl, ttyEnabled: true, command: 'cat'),
       containerTemplate(name: 'helm', image: helm, ttyEnabled: true, command: 'cat'),
-      containerTemplate(name: 'istioctl', image: 'alexanderowenmeehanibm/istioctl', ttyEnabled: true, command: 'cat')
+      containerTemplate(name: 'istioctl', image: istioctl, ttyEnabled: true, command: 'cat')
     ],
     volumes: volumes
   ){
