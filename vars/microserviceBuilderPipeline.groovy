@@ -16,10 +16,10 @@
     kubectlImage = 'lachlanevenson/k8s-kubectl:v1.6.0'
     helmImage = 'lachlanevenson/k8s-helm:v2.4.1'
     istioctlImage = 'ibmcom/istioctl'
+    mvnCommands = 'clean package'
 
   You can also specify:
 
-    mvnCommands = 'clean package'
     build = 'true' - any value other than 'true' == false
     deploy = 'true' - any value other than 'true' == false
     test = 'true' - `mvn verify` is run if this value is `true` and a pom.xml exists
@@ -141,13 +141,19 @@ def call(body) {
         }
       }
 
-      // find the likely chartFolder location
-      def realChartFolder = getChartFolder(userSpecifiedChartFolder, chartFolder)
+      def realChartFolder = null
+      if (fileExists(chartFolder)) {
+        // find the likely chartFolder location
+        realChartFolder = getChartFolder(userSpecifiedChartFolder, chartFolder)
 
-      /* replace '${image}:latest' with '${registry}{image}:${gitcommit}' in yaml folder
-         We'll need this so that we can use folder for test or deployment.
-         It's only a local change and not committed back to git. */
-      sh "find ${realChartFolder} ${manifestFolder} -type f | xargs sed -i \'s|\\(image:\\s*\\)\\(.*\\):latest|\\1${registry}\\2:${gitCommit}|g\'"
+	/* replace '${image}:latest' with '${registry}{image}:${gitcommit}' in yaml folder
+	   We'll need this so that we can use folder for test or deployment.
+	   It's only a local change and not committed back to git. */
+	sh "find ${realChartFolder} -type f | xargs sed -i \'s|\\(image:\\s*\\)\\(.*\\):latest|\\1${registry}\\2:${gitCommit}|g\'"
+      } else {
+        sh "find ${manifestFolder} -type f | xargs sed -i \'s|\\(image:\\s*\\)\\(.*\\):latest|\\1${registry}\\2:${gitCommit}|g\'"
+
+      }
 
       if (test && fileExists('pom.xml') && realChartFolder != null && fileExists(realChartFolder)) {
         stage ('Verify') {
@@ -162,7 +168,11 @@ def call(body) {
           // We're moving to Helm-only deployments. Use Helm to install a deployment to test against.
           container ('helm') {
             sh "helm init --client-only"
-            sh "helm install ${realChartFolder} --set test=true --namespace ${testNamespace} --name ${tempHelmRelease} --wait"
+            def deployCommand = "helm install ${realChartFolder} --wait --set test=true --namespace ${testNamespace} --name ${tempHelmRelease}"
+            if (fileExists("chart/overrides.yaml")) {
+              deployCommand += " --values chart/overrides.yaml"
+            }
+            sh deployCommand
           }
 
           container ('maven') {
@@ -175,9 +185,9 @@ def call(body) {
                 container ('kubectl') {
                   sh "kubectl delete namespace ${testNamespace}"
                   if (fileExists(realChartFolder)) {
-		    container ('helm') {
+		                container ('helm') {
                       sh "helm delete ${tempHelmRelease} --purge"
-		    }
+		                }
                   }
                 }
               }
@@ -191,6 +201,7 @@ def call(body) {
           deployProject (realChartFolder, image, namespace, manifestFolder)
         }
       }
+
       if (fileExists('istio.yaml')) {
         container ('istioctl') {
           try {
@@ -208,8 +219,12 @@ def deployProject (String chartFolder, String image, String namespace, String ma
   if (chartFolder != null && fileExists(chartFolder)) {
     container ('helm') {
       sh "helm init --client-only"
-      def deployCommand = "helm upgrade --install ${image} ${chartFolder}"
+      def deployCommand = "helm upgrade --install ${image}"
+      if (fileExists("chart/overrides.yaml")) {
+        deployCommand += " --values chart/overrides.yaml"
+      }
       if (namespace) deployCommand += " --namespace ${namespace}"
+      deployCommand += " ${chartFolder}"
       sh deployCommand
     }
   } else if (fileExists(manifestFolder)) {
@@ -312,7 +327,7 @@ def getChartFolder(String userSpecified, String currentChartFolder) {
 	    }
 	  } else {
 	      print "-----------------------------------------------------------"
-              print "*** Chart directory ${env.WORKSPACE}/${currentChartFolder} has no subdirectories, incorrect configuration, returning null"
+              print "*** Chart directory ${env.WORKSPACE}/${currentChartFolder} has no subdirectories, returning null"
 	      print "-----------------------------------------------------------"
 	      return null
 	  }
