@@ -15,7 +15,7 @@
     dockerImage = 'docker'
     kubectlImage = 'lachlanevenson/k8s-kubectl:v1.6.0'
     helmImage = 'lachlanevenson/k8s-helm:v2.4.1'
-    istioctlImage = 'ibmcom/istioctl'
+    istioctlImage = 'ibmcom/istioctl:1.6.0'
     mvnCommands = 'clean package'
 
   You can also specify:
