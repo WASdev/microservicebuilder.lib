@@ -29,6 +29,7 @@
     manifestFolder = 'manifests' - folder containing kubectl deployment manifests
     namespace = 'targetNamespace' - deploys into Kubernetes targetNamespace.
       Default is to deploy into Jenkins' namespace.
+    libertyLicenseJarName - override for Pipeline.LibertyLicenseJar.Name
 
 -------------------------*/
 
@@ -69,6 +70,8 @@ def call(body) {
   def userSpecifiedChartFolder = config.chartFolder
   def chartFolder = userSpecifiedChartFolder ?: ((System.getenv("CHART_FOLDER") ?: "").trim() ?: 'chart')
   def manifestFolder = config.manifestFolder ?: ((System.getenv("MANIFEST_FOLDER") ?: "").trim() ?: 'manifests')
+  def libertyLicenseJarBaseUrl = (System.getenv("LIBERTY_LICENSE_JAR_BASE_URL") ?: "").trim()
+  def libertyLicenseJarName = config.libertyLicenseJarName ?: (System.getenv("LIBERTY_LICENSE_JAR_NAME") ?: "").trim()
 
   print "microserviceBuilderPipeline: registry=${registry} registrySecret=${registrySecret} build=${build} \
   deploy=${deploy} deployBranch=${deployBranch} test=${test} debug=${debug} namespace=${namespace} \
@@ -104,7 +107,7 @@ def call(body) {
       containerTemplate(name: 'istioctl', image: istioctl, ttyEnabled: true, command: 'cat')
     ],
     volumes: volumes
-  ){
+  ) {
     node('msbPod') {
       def gitCommit
 
@@ -125,7 +128,18 @@ def call(body) {
         if (fileExists('Dockerfile')) {
           stage ('Docker Build') {
             container ('docker') {
-              sh "docker build -t ${image}:${gitCommit} ."
+              def buildCommand = "docker build -t ${image}:${gitCommit}"
+              if (libertyLicenseJarBaseUrl) {
+                if (readFile('Dockerfile').contains('LICENSE_JAR_URL')) {
+                  buildCommand += " --build-arg LICENSE_JAR_URL=" + libertyLicenseJarBaseUrl
+                  if (!libertyLicenseJarBaseUrl.endsWith("/")) {
+                    buildCommand += "/"
+                  }
+                  buildCommand += libertyLicenseJarName
+                }
+              }
+              buildCommand += " ."
+              sh buildCommand
               if (registry) {
                 if (!registry.endsWith('/')) {
                   registry = "${registry}/"
@@ -146,13 +160,12 @@ def call(body) {
         // find the likely chartFolder location
         realChartFolder = getChartFolder(userSpecifiedChartFolder, chartFolder)
 
-	/* replace '${image}:latest' with '${registry}{image}:${gitcommit}' in yaml folder
-	   We'll need this so that we can use folder for test or deployment.
-	   It's only a local change and not committed back to git. */
-	sh "find ${realChartFolder} -type f | xargs sed -i \'s|\\(image:\\s*\\)\\(.*\\):latest|\\1${registry}\\2:${gitCommit}|g\'"
+        /* replace '${image}:latest' with '${registry}{image}:${gitcommit}' in yaml folder
+           We'll need this so that we can use folder for test or deployment.
+           It's only a local change and not committed back to git. */
+        sh "find ${realChartFolder} -type f | xargs sed -i \'s|\\(image:\\s*\\)\\(.*\\):latest|\\1${registry}\\2:${gitCommit}|g\'"
       } else {
         sh "find ${manifestFolder} -type f | xargs sed -i \'s|\\(image:\\s*\\)\\(.*\\):latest|\\1${registry}\\2:${gitCommit}|g\'"
-
       }
 
       if (test && fileExists('pom.xml') && realChartFolder != null && fileExists(realChartFolder)) {
@@ -185,9 +198,9 @@ def call(body) {
                 container ('kubectl') {
                   sh "kubectl delete namespace ${testNamespace}"
                   if (fileExists(realChartFolder)) {
-		                container ('helm') {
+                    container ('helm') {
                       sh "helm delete ${tempHelmRelease} --purge"
-		                }
+                    }
                   }
                 }
               }
@@ -279,58 +292,58 @@ def getChartFolder(String userSpecified, String currentChartFolder) {
     print "User defined chart location specified: ${userSpecified}"
     return userSpecified
   } else {
-      print "Finding actual chart folder below ${env.WORKSPACE}/${currentChartFolder}..."
-      def fp = new hudson.FilePath(Jenkins.getInstance().getComputer(env['NODE_NAME']).getChannel(), env.WORKSPACE + "/" + currentChartFolder)
-      def dirList = fp.listDirectories()
-      if (dirList.size() > 1) {
-        print "More than one directory in ${env.WORKSPACE}/${currentChartFolder}..."
-        print "Directories found are:"
-        def yamlList = []
-        for (d in dirList) {
-          print "${d}"
-          def fileToTest = new hudson.FilePath(d, "Chart.yaml")
-          if (fileToTest.exists()) {
-            yamlList.add(d)
-          }
+    print "Finding actual chart folder below ${env.WORKSPACE}/${currentChartFolder}..."
+    def fp = new hudson.FilePath(Jenkins.getInstance().getComputer(env['NODE_NAME']).getChannel(), env.WORKSPACE + "/" + currentChartFolder)
+    def dirList = fp.listDirectories()
+    if (dirList.size() > 1) {
+      print "More than one directory in ${env.WORKSPACE}/${currentChartFolder}..."
+      print "Directories found are:"
+      def yamlList = []
+      for (d in dirList) {
+        print "${d}"
+        def fileToTest = new hudson.FilePath(d, "Chart.yaml")
+        if (fileToTest.exists()) {
+          yamlList.add(d)
         }
-        if (yamlList.size() > 1) {
-	  print "-----------------------------------------------------------"
-          print "*** More than one directory with Chart.yaml in ${env.WORKSPACE}/${currentChartFolder}."
-	  print "*** Please specify chart folder to use in your Jenkinsfile."
-	  print "*** Returning null."
-	  print "-----------------------------------------------------------"
-          return null
+      }
+      if (yamlList.size() > 1) {
+        print "-----------------------------------------------------------"
+        print "*** More than one directory with Chart.yaml in ${env.WORKSPACE}/${currentChartFolder}."
+        print "*** Please specify chart folder to use in your Jenkinsfile."
+        print "*** Returning null."
+        print "-----------------------------------------------------------"
+        return null
+      } else {
+        if (yamlList.size() == 1) {
+          newChartLocation = currentChartFolder + "/" + yamlList.get(0).getName()
+          print "Chart.yaml found in ${newChartLocation}, setting as realChartFolder"
+          return newChartLocation
         } else {
-	    if (yamlList.size() == 1) {
-              newChartLocation = currentChartFolder + "/" + yamlList.get(0).getName()
-              print "Chart.yaml found in ${newChartLocation}, setting as realChartFolder"
-              return newChartLocation
-	    } else {
-	        print "-----------------------------------------------------------"
-	        print "*** No sub directory in ${env.WORKSPACE}/${currentChartFolder} contains a Chart.yaml, returning null"
-		print "-----------------------------------------------------------"
-	        return null
-	    }
+          print "-----------------------------------------------------------"
+          print "*** No sub directory in ${env.WORKSPACE}/${currentChartFolder} contains a Chart.yaml, returning null"
+          print "-----------------------------------------------------------"
+          return null
+        }
+      }
+    } else {
+      if (dirList.size() == 1) {
+        def chartFile = new hudson.FilePath(dirList.get(0), "Chart.yaml")
+        newChartLocation = currentChartFolder + "/" + dirList.get(0).getName()
+        if (chartFile.exists()) {
+          print "Only one child directory found, setting realChartFolder to: ${newChartLocation}"
+          return newChartLocation
+        } else {
+          print "-----------------------------------------------------------"
+          print "*** Chart.yaml file does not exist in ${newChartLocation}, returning null"
+          print "-----------------------------------------------------------"
+          return null
         }
       } else {
-          if (dirList.size() == 1) {
-	    def chartFile = new hudson.FilePath(dirList.get(0), "Chart.yaml")
-	    newChartLocation = currentChartFolder + "/" + dirList.get(0).getName()
-	    if (chartFile.exists()) {
-              print "Only one child directory found, setting realChartFolder to: ${newChartLocation}"
-              return newChartLocation
-	    } else {
-	        print "-----------------------------------------------------------"
-                print "*** Chart.yaml file does not exist in ${newChartLocation}, returning null"
-		print "-----------------------------------------------------------"
-		return null
-	    }
-	  } else {
-	      print "-----------------------------------------------------------"
-              print "*** Chart directory ${env.WORKSPACE}/${currentChartFolder} has no subdirectories, returning null"
-	      print "-----------------------------------------------------------"
-	      return null
-	  }
+        print "-----------------------------------------------------------"
+        print "*** Chart directory ${env.WORKSPACE}/${currentChartFolder} has no subdirectories, returning null"
+        print "-----------------------------------------------------------"
+        return null
       }
     }
+  }
 }
