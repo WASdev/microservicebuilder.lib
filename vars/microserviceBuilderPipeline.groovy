@@ -57,6 +57,7 @@ def call(body) {
   def istioctl = (config.istioctlImage == null) ? 'ibmcom/istioctl:1.6.0' : config.istioctlImage
   def mvnCommands = (config.mvnCommands == null) ? 'clean package' : config.mvnCommands
   def registry = System.getenv("REGISTRY").trim()
+  if (registry && !registry.endsWith('/')) registry = "${registry}/"
   def registrySecret = System.getenv("REGISTRY_SECRET").trim()
   def build = (config.build ?: System.getenv ("BUILD")).trim().toLowerCase() == 'true'
   def deploy = (config.deploy ?: System.getenv ("DEPLOY")).trim().toLowerCase() == 'true'
@@ -143,9 +144,6 @@ def call(body) {
               buildCommand += " ."
               sh buildCommand
               if (registry) {
-                if (!registry.endsWith('/')) {
-                  registry = "${registry}/"
-                }
                 if (registrySecret) {
                   sh "ln -s /msb_reg_sec/.dockercfg /home/jenkins/.dockercfg"
                 }
@@ -178,7 +176,7 @@ def call(body) {
           // We're moving to Helm-only deployments. Use Helm to install a deployment to test against.
           container ('helm') {
             sh "helm init --client-only"
-            def deployCommand = "helm install ${realChartFolder} --wait --set test=true,image.repository=${registry}/${image},image.tag=${imageTag} --namespace ${testNamespace} --name ${tempHelmRelease}"
+            def deployCommand = "helm install ${realChartFolder} --wait --set test=true,image.repository=${registry}${image},image.tag=${imageTag} --namespace ${testNamespace} --name ${tempHelmRelease}"
             if (fileExists("chart/overrides.yaml")) {
               deployCommand += " --values chart/overrides.yaml"
             }
@@ -229,7 +227,7 @@ def deployProject (String chartFolder, String registry, String image, String ima
   if (chartFolder != null && fileExists(chartFolder)) {
     container ('helm') {
       sh "helm init --client-only"
-      def deployCommand = "helm upgrade --install --set image.repository=${registry}/${image}"
+      def deployCommand = "helm upgrade --install --set image.repository=${registry}${image}"
       if (imageTag) deployCommand += ",image.tag=${imageTag}"
       if (fileExists("chart/overrides.yaml")) {
         deployCommand += " --values chart/overrides.yaml"
