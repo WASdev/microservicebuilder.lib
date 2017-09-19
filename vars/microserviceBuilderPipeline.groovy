@@ -117,6 +117,7 @@ def call(body) {
         echo "checked out git commit ${gitCommit}"
       }
 
+      def imageTag = null
       if (build) {
         if (fileExists('pom.xml')) {
           stage ('Maven Build') {
@@ -128,7 +129,8 @@ def call(body) {
         if (fileExists('Dockerfile')) {
           stage ('Docker Build') {
             container ('docker') {
-              def buildCommand = "docker build --pull=true -t ${image}:${gitCommit}"
+              imageTag = gitCommit
+              def buildCommand = "docker build --pull=true -t ${image}:${imageTag}"
               if (libertyLicenseJarBaseUrl) {
                 if (readFile('Dockerfile').contains('LICENSE_JAR_URL')) {
                   buildCommand += " --build-arg LICENSE_JAR_URL=" + libertyLicenseJarBaseUrl
@@ -147,8 +149,8 @@ def call(body) {
                 if (registrySecret) {
                   sh "ln -s /msb_reg_sec/.dockercfg /home/jenkins/.dockercfg"
                 }
-                sh "docker tag ${image}:${gitCommit} ${registry}${image}:${gitCommit}"
-                sh "docker push ${registry}${image}:${gitCommit}"
+                sh "docker tag ${image}:${imageTag} ${registry}${image}:${imageTag}"
+                sh "docker push ${registry}${image}:${imageTag}"
               }
             }
           }
@@ -159,11 +161,6 @@ def call(body) {
       if (fileExists(chartFolder)) {
         // find the likely chartFolder location
         realChartFolder = getChartFolder(userSpecifiedChartFolder, chartFolder)
-
-        /* replace '${image}:latest' with '${registry}{image}:${gitcommit}' in yaml folder
-           We'll need this so that we can use folder for test or deployment.
-           It's only a local change and not committed back to git. */
-        sh "find ${realChartFolder} -type f | xargs sed -i \'s|\\(image:\\s*\\)\\(.*\\):latest|\\1${registry}\\2:${gitCommit}|g\'"
       } else {
         sh "find ${manifestFolder} -type f | xargs sed -i \'s|\\(image:\\s*\\)\\(.*\\):latest|\\1${registry}\\2:${gitCommit}|g\'"
       }
@@ -181,7 +178,7 @@ def call(body) {
           // We're moving to Helm-only deployments. Use Helm to install a deployment to test against.
           container ('helm') {
             sh "helm init --client-only"
-            def deployCommand = "helm install ${realChartFolder} --wait --set test=true --namespace ${testNamespace} --name ${tempHelmRelease}"
+            def deployCommand = "helm install ${realChartFolder} --wait --set test=true,image.repository=${registry}/${image},image.tag=${imageTag} --namespace ${testNamespace} --name ${tempHelmRelease}"
             if (fileExists("chart/overrides.yaml")) {
               deployCommand += " --values chart/overrides.yaml"
             }
@@ -211,7 +208,7 @@ def call(body) {
 
       if (deploy && env.BRANCH_NAME == deployBranch) {
         stage ('Deploy') {
-          deployProject (realChartFolder, image, namespace, manifestFolder)
+          deployProject (realChartFolder, registry, image, imageTag, namespace, manifestFolder)
         }
       }
 
@@ -228,11 +225,12 @@ def call(body) {
   }
 }
 
-def deployProject (String chartFolder, String image, String namespace, String manifestFolder) {
+def deployProject (String chartFolder, String registry, String image, String imageTag, String namespace, String manifestFolder) {
   if (chartFolder != null && fileExists(chartFolder)) {
     container ('helm') {
       sh "helm init --client-only"
-      def deployCommand = "helm upgrade --install"
+      def deployCommand = "helm upgrade --install --set image.repository=${registry}/${image}"
+      if (imageTag) deployCommand += ",image.tag=${imageTag}"
       if (fileExists("chart/overrides.yaml")) {
         deployCommand += " --values chart/overrides.yaml"
       }
