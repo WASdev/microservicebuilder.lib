@@ -14,7 +14,7 @@
     mavenImage = 'maven:3.5.0-jdk-8'
     dockerImage = 'docker'
     kubectlImage = 'ibmcom/k8s-kubectl:v1.7.6'
-    helmImage = 'libmcom/k8s-helm:v2.5.0'
+    helmImage = 'ibmcom/k8s-helm:v2.5.0'
 
   You can also specify:
 
