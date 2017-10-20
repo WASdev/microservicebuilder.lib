@@ -250,6 +250,8 @@ def deployProject (String chartFolder, String registry, String image, String ima
 */
 
 def giveRegistryAccessToNamespace (String namespace, String registrySecret) {
+  sh "kubectl get secret -o json --namespace default | jq '.items[].metadata.namespace = \"${namespace}\"' | kubectl create -f -"
+  sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"myregistrykey\"}]}' --namespace ${namespace}"
   /*
   String secretScript = "kubectl get secret/${registrySecret} -o jsonpath=\"{.data.\\.dockercfg}\""
   String secret = sh (script: secretScript, returnStdout: true).trim()
@@ -263,20 +265,22 @@ def giveRegistryAccessToNamespace (String namespace, String registrySecret) {
   type: kubernetes.io/dockercfg
   """
   sh "printf -- \"${yaml}\" | kubectl apply --namespace ${namespace} -f -"
-  */
+  
   sh "kubectl get secret -o json --namespace default | jq '.items[].metadata.namespace = \"${namespace}\"' | kubectl create -f -"
 
   String sa = sh (script: "kubectl get sa default -o json --namespace ${namespace}", returnStdout: true).trim()
-  /*
+  
       Use JsonSlurperClassic because JsonSlurper is not thread safe, not serializable, and not good to use in Jenkins jobs.
       See https://stackoverflow.com/questions/37864542/jenkins-pipeline-notserializableexception-groovy-json-internal-lazymap
-  */
+  
   def map = new JsonSlurperClassic().parseText (sa)
   map.metadata.remove ('resourceVersion')
   map.put ('imagePullSecrets', [['name': registrySecret]])
   def json = JsonOutput.prettyPrint(JsonOutput.toJson(map))
   writeFile file: 'temp.json', text: json
   sh "kubectl replace sa default --namespace ${namespace} -f temp.json"
+  */
+
 }
 
 def getChartFolder(String userSpecified, String currentChartFolder) {
