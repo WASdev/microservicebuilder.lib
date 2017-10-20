@@ -250,6 +250,7 @@ def deployProject (String chartFolder, String registry, String image, String ima
 */
 
 def giveRegistryAccessToNamespace (String namespace, String registrySecret) {
+  /*
   String secretScript = "kubectl get secret/${registrySecret} -o jsonpath=\"{.data.\\.dockercfg}\""
   String secret = sh (script: secretScript, returnStdout: true).trim()
   String yaml = """
@@ -262,6 +263,8 @@ def giveRegistryAccessToNamespace (String namespace, String registrySecret) {
   type: kubernetes.io/dockercfg
   """
   sh "printf -- \"${yaml}\" | kubectl apply --namespace ${namespace} -f -"
+  */
+  sh "kubectl get secret -o json --namespace default | jq '.items[].metadata.namespace = \"${namespace}\"' | kubectl create -f -"
 
   String sa = sh (script: "kubectl get sa default -o json --namespace ${namespace}", returnStdout: true).trim()
   /*
