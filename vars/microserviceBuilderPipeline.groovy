@@ -241,7 +241,7 @@ def deployProject (String chartFolder, String registry, String image, String ima
 }
 
 /*
-  We have a (temporary) namespace that we want to grant ICp registry access to.
+  We have a (temporary) namespace that we want to grant ICP registry access to.
   String namespace: target namespace
 
   1. Port registrySecret into a temporary namespace
