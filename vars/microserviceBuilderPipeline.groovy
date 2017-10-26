@@ -251,7 +251,7 @@ def deployProject (String chartFolder, String registry, String image, String ima
 
 def giveRegistryAccessToNamespace (String namespace) {
   sh "kubectl get secret admin.registrykey -o json --namespace default | sed 's/\"namespace\": \"default\"/\"namespace\": \"${namespace}\"/g' | kubectl create -f -"
-  sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"myregistrykey\"}]}' --namespace ${namespace}"
+  sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"admin.registrykey\"}]}' --namespace ${namespace}"
 }
 
 def getChartFolder(String userSpecified, String currentChartFolder) {
