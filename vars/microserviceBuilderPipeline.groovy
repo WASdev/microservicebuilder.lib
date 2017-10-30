@@ -96,7 +96,6 @@ def call(body) {
       containerTemplate(name: 'maven', image: maven, ttyEnabled: true, command: 'cat',
         envVars: [
           containerEnvVar(key: 'ENV_INIT_ENABLED', value: 'false'),
-          containerEnvVar(key: 'NAMESPACE_USE_EXISTING', value: testNamespace)
         ]),
       containerTemplate(name: 'docker', image: docker, command: 'cat', ttyEnabled: true,
         envVars: [
@@ -191,7 +190,7 @@ def call(body) {
 
           container ('maven') {
             try {
-              sh "mvn -B verify"
+              sh "mvn -B -Dnamespace.use.existing=${testNamespace} -Denv.init.enabled verify"
             } finally {
               step([$class: 'JUnitResultArchiver', allowEmptyResults: true, testResults: '**/target/failsafe-reports/*.xml'])
               step([$class: 'ArtifactArchiver', artifacts: '**/target/failsafe-reports/*.txt', allowEmptyArchive: true])
@@ -242,39 +241,16 @@ def deployProject (String chartFolder, String registry, String image, String ima
 }
 
 /*
-  We have a (temporary) namespace that we want to grant CfC registry access to.
+  We have a (temporary) namespace that we want to grant ICP registry access to.
   String namespace: target namespace
-  String registrySecret: secret in Jenkins' namespace to use
 
-  1. Port registrySecret into namespace
+  1. Port registrySecret into a temporary namespace
   2. Modify 'default' serviceaccount to use ported registrySecret.
 */
 
 def giveRegistryAccessToNamespace (String namespace, String registrySecret) {
-  String secretScript = "kubectl get secret/${registrySecret} -o jsonpath=\"{.data.\\.dockercfg}\""
-  String secret = sh (script: secretScript, returnStdout: true).trim()
-  String yaml = """
-  apiVersion: v1
-  data:
-    .dockercfg: ${secret}
-  kind: Secret
-  metadata:
-    name: ${registrySecret}
-  type: kubernetes.io/dockercfg
-  """
-  sh "printf -- \"${yaml}\" | kubectl apply --namespace ${namespace} -f -"
-
-  String sa = sh (script: "kubectl get sa default -o json --namespace ${namespace}", returnStdout: true).trim()
-  /*
-      Use JsonSlurperClassic because JsonSlurper is not thread safe, not serializable, and not good to use in Jenkins jobs.
-      See https://stackoverflow.com/questions/37864542/jenkins-pipeline-notserializableexception-groovy-json-internal-lazymap
-  */
-  def map = new JsonSlurperClassic().parseText (sa)
-  map.metadata.remove ('resourceVersion')
-  map.put ('imagePullSecrets', [['name': registrySecret]])
-  def json = JsonOutput.prettyPrint(JsonOutput.toJson(map))
-  writeFile file: 'temp.json', text: json
-  sh "kubectl replace sa default --namespace ${namespace} -f temp.json"
+  sh "kubectl get secret ${registrySecret} -o json --namespace default | sed 's/\"namespace\": \"default\"/\"namespace\": \"${namespace}\"/g' | kubectl create -f -"
+  sh "kubectl patch serviceaccount default -p '{\"imagePullSecrets\": [{\"name\": \"${registrySecret}\"}]}' --namespace ${namespace}"
 }
 
 def getChartFolder(String userSpecified, String currentChartFolder) {
