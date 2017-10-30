@@ -187,7 +187,7 @@ def call(body) {
 
           container ('maven') {
             try {
-              sh "mvn -B -Dnamespace.use.existing=${testNamespace} -Denv.init.enabled verify "
+              sh "mvn -B -Dnamespace.use.existing=${testNamespace} -Denv.init.enabled=false verify "
             } finally {}
               step([$class: 'JUnitResultArchiver', allowEmptyResults: true, testResults: '**/target/failsafe-reports/*.xml'])
               step([$class: 'ArtifactArchiver', artifacts: '**/target/failsafe-reports/*.txt', allowEmptyArchive: true])
