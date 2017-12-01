@@ -124,6 +124,13 @@ def call(body) {
             container ('docker') {
               imageTag = gitCommit
               def buildCommand = "docker build -t ${image}:${imageTag} "
+              buildCommand += "--label org.label-schema.schema-version=\"1.0\" "
+              def scmUrl = scm.getUserRemoteConfigs()[0].getUrl()
+              buildCommand += "--label org.label-schema.vcs-url=\"${scmUrl}\" "
+              buildCommand += "--label org.label-schema.vcs-ref=\"${gitCommit}\" "  
+              buildCommand += "--label org.label-schema.name=\"${image}\" "
+              def buildDate = sh(returnStdout: true, script: "date -Iseconds").trim()
+              buildCommand += "--label org.label-schema.build-date=\"${buildDate}\" "
               if (alwaysPullImage) {
                 buildCommand += " --pull=true "
               }
