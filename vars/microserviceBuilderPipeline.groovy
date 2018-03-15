@@ -50,7 +50,7 @@ def call(body) {
   def image = config.image
   def maven = (config.mavenImage == null) ? 'maven:3.5.2-jdk-8' : config.mavenImage
   def docker = (config.dockerImage == null) ? 'ibmcom/docker:17.10' : config.dockerImage
-  def kubectl = (config.kubectlImage == null) ? 'ibmcom/k8s-kubectl:v1.8.3' : config.kubectlImage  
+  def kubectl = (config.kubectlImage == null) ? 'ibmcom/k8s-kubectl:v1.8.3' : config.kubectlImage
   def helm = (config.helmImage == null) ? 'lachlanevenson/k8s-helm:v2.7.2' : config.helmImage
   def mvnCommands = (config.mvnCommands == null) ? 'clean package' : config.mvnCommands
   def registry = (env.REGISTRY ?: "").trim()
@@ -174,7 +174,7 @@ def call(body) {
             }
           }
         }
-      }           
+      }
 
       def realChartFolder = null
       if (fileExists(chartFolder)) {
