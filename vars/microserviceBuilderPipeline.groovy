@@ -110,6 +110,12 @@ def call(body) {
         sh "helm init --skip-refresh --tiller-namespace default"    
       }
 
+      echo "Checking we've got a tiller deployment ready before we helm install"
+      container ('kubectl') {
+        // This is going to block until we've got a tiller deploy
+        sh "kubectl rollout status deployment -n kube-system tiller-deploy" 
+      }
+
       stage ('Extract') {
         checkout scm
         gitCommit = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
@@ -157,6 +163,8 @@ def call(body) {
               buildCommand += " ."
               if (registrySecret) {
                 sh "ln -s /msb_reg_sec/.dockercfg /home/jenkins/.dockercfg"
+                sh "mkdir /home/jenkins/.docker"
+                sh "ln -s /msb_reg_sec/.dockerconfigjson /home/jenkins/.docker/config.json"
               }
               sh buildCommand
               if (registry) {
@@ -166,7 +174,7 @@ def call(body) {
             }
           }
         }
-      }
+      }           
 
       def realChartFolder = null
       if (fileExists(chartFolder)) {
@@ -197,7 +205,6 @@ def call(body) {
           }
           
           container ('helm') {
-            sh "/helm init --client-only --skip-refresh"
             def deployCommand = "/helm install ${realChartFolder} --wait --set test=true --values pipeline.yaml --namespace ${testNamespace} --name ${tempHelmRelease} --tiller-namespace default"
             if (fileExists("chart/overrides.yaml")) {
               deployCommand += " --values chart/overrides.yaml"
