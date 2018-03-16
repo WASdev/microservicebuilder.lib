@@ -283,9 +283,9 @@ def deployProject (String chartFolder, String registry, String image, String ima
       if (namespace) {
         deployCommand += " --namespace ${namespace}"
         container ('kubectl') {
-          ns_exists = sh(returnStdout: true, script: 'kubectl get namespace ${namespace} | echo $?')
+          ns_exists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
           echo "DEBUG: ${ns_exists}"
-          if (ns_exists != "0") {
+          if (ns_exists != 0) {
             sh "kubectl create namespace ${namespace} || true"
             if (registrySecret) {
               giveRegistryAccessToNamespace (namespace, registrySecret)
@@ -301,9 +301,9 @@ def deployProject (String chartFolder, String registry, String image, String ima
     container ('kubectl') {
       def deployCommand = "kubectl apply -f ${manifestFolder}"
       if (namespace) {
-        ns_exists = sh(returnStdout: true, script: 'kubectl get namespace ${namespace} | echo $?')
+        ns_exists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
         echo "DEBUG: ${ns_exists}"
-        if (ns_exists != "0") {
+        if (ns_exists != 0) {
           sh "kubectl create namespace ${namespace} || true"
           if (registrySecret) {
             giveRegistryAccessToNamespace (namespace, registrySecret)
