@@ -306,7 +306,7 @@ def deployProject (String chartFolder, String registry, String image, String ima
 def createNamespace(String namespace, String registrySecret) {
   container ('kubectl') {
     ns_exists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
-    if (!ns_exists) {
+    if (ns_exists != 0) {
       sh "kubectl create namespace ${namespace}"
       if (registrySecret) {
         giveRegistryAccessToNamespace (namespace, registrySecret)
