@@ -283,7 +283,13 @@ def deployProject (String chartFolder, String registry, String image, String ima
       if (namespace) {
         deployCommand += " --namespace ${namespace}"
         container ('kubectl') {
-          sh "kubectl create namespace ${namespace} || true"
+          ns_exists = sh "kubectl get namespace ${namespace}"
+          if (ns_exists != 0) {
+            sh "kubectl create namespace ${namespace} || true"
+            if (registrySecret) {
+              giveRegistryAccessToNamespace (${namespace}, registrySecret)
+            }
+          }
         }
       }
       def releaseName = (env.BRANCH_NAME == "master") ? "${image}" : "${image}-${env.BRANCH_NAME}"
@@ -294,8 +300,14 @@ def deployProject (String chartFolder, String registry, String image, String ima
     container ('kubectl') {
       def deployCommand = "kubectl apply -f ${manifestFolder}"
       if (namespace) {
+        ns_exists = sh "kubectl get namespace ${namespace}"
+        if (ns_exists != 0) {
+          sh "kubectl create namespace ${namespace} || true"
+          if (registrySecret) {
+            giveRegistryAccessToNamespace (${namespace}, registrySecret)
+          }
+        }
         deployCommand += " --namespace ${namespace}"
-        sh "kubectl create namespace ${namespace} || true"
       }
       sh deployCommand
     }
