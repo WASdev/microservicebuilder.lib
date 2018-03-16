@@ -282,16 +282,7 @@ def deployProject (String chartFolder, String registry, String image, String ima
       }
       if (namespace) {
         deployCommand += " --namespace ${namespace}"
-        container ('kubectl') {
-          ns_exists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
-          echo "DEBUG: ${ns_exists}"
-          if (ns_exists != 0) {
-            sh "kubectl create namespace ${namespace} || true"
-            if (registrySecret) {
-              giveRegistryAccessToNamespace (namespace, registrySecret)
-            }
-          }
-        }
+        createNamespace(namespace, registrySecret)   
       }
       def releaseName = (env.BRANCH_NAME == "master") ? "${image}" : "${image}-${env.BRANCH_NAME}"
       deployCommand += " ${releaseName} ${chartFolder}"
@@ -301,17 +292,25 @@ def deployProject (String chartFolder, String registry, String image, String ima
     container ('kubectl') {
       def deployCommand = "kubectl apply -f ${manifestFolder}"
       if (namespace) {
-        ns_exists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
-        echo "DEBUG: ${ns_exists}"
-        if (ns_exists != 0) {
-          sh "kubectl create namespace ${namespace} || true"
-          if (registrySecret) {
-            giveRegistryAccessToNamespace (namespace, registrySecret)
-          }
-        }
+        createNamespace(namespace, registrySecret)
         deployCommand += " --namespace ${namespace}"
       }
       sh deployCommand
+    }
+  }
+}
+
+/*
+  Create target namespace and give access to regsitry
+*/
+def createNamespace(String namespace, String registrySecret) {
+  container ('kubectl') {
+    ns_exists = sh(returnStatus: true, script: "kubectl get namespace ${namespace}")
+    if (!ns_exists) {
+      sh "kubectl create namespace ${namespace}"
+      if (registrySecret) {
+        giveRegistryAccessToNamespace (namespace, registrySecret)
+      }
     }
   }
 }
