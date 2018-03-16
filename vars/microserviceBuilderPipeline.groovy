@@ -288,7 +288,7 @@ def deployProject (String chartFolder, String registry, String image, String ima
           if (ns_exists != 0) {
             sh "kubectl create namespace ${namespace} || true"
             if (registrySecret) {
-              giveRegistryAccessToNamespace (${namespace}, ${registrySecret})
+              giveRegistryAccessToNamespace (namespace, registrySecret)
             }
           }
         }
@@ -306,7 +306,7 @@ def deployProject (String chartFolder, String registry, String image, String ima
         if (ns_exists != 0) {
           sh "kubectl create namespace ${namespace} || true"
           if (registrySecret) {
-            giveRegistryAccessToNamespace (${namespace}, ${registrySecret})
+            giveRegistryAccessToNamespace (namespace, registrySecret)
           }
         }
         deployCommand += " --namespace ${namespace}"
