@@ -280,7 +280,12 @@ def deployProject (String chartFolder, String registry, String image, String ima
       if (fileExists("chart/overrides.yaml")) {
         deployCommand += " --values chart/overrides.yaml"
       }
-      if (namespace) deployCommand += " --namespace ${namespace}"
+      if (namespace) {
+        deployCommand += " --namespace ${namespace}"
+        container ('kubectl') {
+          sh "kubectl create namespace ${namespace}"
+        }
+      }
       def releaseName = (env.BRANCH_NAME == "master") ? "${image}" : "${image}-${env.BRANCH_NAME}"
       deployCommand += " ${releaseName} ${chartFolder}"
       sh deployCommand
@@ -288,7 +293,10 @@ def deployProject (String chartFolder, String registry, String image, String ima
   } else if (fileExists(manifestFolder)) {
     container ('kubectl') {
       def deployCommand = "kubectl apply -f ${manifestFolder}"
-      if (namespace) deployCommand += " --namespace ${namespace}"
+      if (namespace) {
+        deployCommand += " --namespace ${namespace}"
+        sh "kubectl create namespace ${namespace}"
+      }
       sh deployCommand
     }
   }
