@@ -244,7 +244,7 @@ def call(body) {
             initalizeHelm (tillerNamespace)
             helmInitialized = true
           }
-          deployProject (realChartFolder, registry, image, imageTag, namespace, manifestFolder)
+          deployProject (realChartFolder, registry, image, imageTag, namespace, manifestFolder, registrySecret)
         }
       }
     }
@@ -273,7 +273,7 @@ def initalizeHelm (String tillerNamespace) {
   }
 }
 
-def deployProject (String chartFolder, String registry, String image, String imageTag, String namespace, String manifestFolder) {
+def deployProject (String chartFolder, String registry, String image, String imageTag, String namespace, String manifestFolder, String registrySecret) {
   if (chartFolder != null && fileExists(chartFolder)) {
     container ('helm') {
       def deployCommand = "helm upgrade --install --wait --values pipeline.yaml"
@@ -287,7 +287,7 @@ def deployProject (String chartFolder, String registry, String image, String ima
           if (ns_exists != 0) {
             sh "kubectl create namespace ${namespace} || true"
             if (registrySecret) {
-              giveRegistryAccessToNamespace (${namespace}, registrySecret)
+              giveRegistryAccessToNamespace (${namespace}, ${registrySecret})
             }
           }
         }
@@ -304,7 +304,7 @@ def deployProject (String chartFolder, String registry, String image, String ima
         if (ns_exists != 0) {
           sh "kubectl create namespace ${namespace} || true"
           if (registrySecret) {
-            giveRegistryAccessToNamespace (${namespace}, registrySecret)
+            giveRegistryAccessToNamespace (${namespace}, ${registrySecret})
           }
         }
         deployCommand += " --namespace ${namespace}"
