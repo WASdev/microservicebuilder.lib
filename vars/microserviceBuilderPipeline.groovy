@@ -7,6 +7,7 @@
   microserviceBuilderPipeline {
     image = 'microservice-test'
   }
+
   The following parameters may also be specified. Their defaults are shown below.
   These are the names of images to be downloaded from https://hub.docker.com/.
 
