@@ -7,17 +7,13 @@
   microserviceBuilderPipeline {
     image = 'microservice-test'
   }
-
   The following parameters may also be specified. Their defaults are shown below.
   These are the names of images to be downloaded from https://hub.docker.com/.
-
     mavenImage = 'maven:3.5.2-jdk-8'
     dockerImage = 'ibmcom/docker:17.10'
     kubectlImage = 'ibmcom/k8s-kubectl:v1.8.3'
     helmImage = 'lachlanevenson/k8s-helm:v2.7.2'
-
   You can also specify:
-
     mvnCommands = 'clean package'
     build = 'true' - any value other than 'true' == false
     deploy = 'true' - any value other than 'true' == false
@@ -28,7 +24,6 @@
     namespace = 'targetNamespace' - deploys into Kubernetes targetNamespace.
       Default is to deploy into Jenkins' namespace.
     libertyLicenseJarName - override for Pipeline.LibertyLicenseJar.Name
-
 -------------------------*/
 
 import com.cloudbees.groovy.cps.NonCPS
@@ -72,7 +67,7 @@ def call(body) {
   def libertyLicenseJarName = config.libertyLicenseJarName ?: (env.LIBERTY_LICENSE_JAR_NAME ?: "").trim()
   def alwaysPullImage = (env.ALWAYS_PULL_IMAGE == null) ? true : env.ALWAYS_PULL_IMAGE.toBoolean()
   def mavenSettingsConfigMap = env.MAVEN_SETTINGS_CONFIG_MAP?.trim() 
-
+  
   print "microserviceBuilderPipeline: registry=${registry} registrySecret=${registrySecret} build=${build} \
   deploy=${deploy} test=${test} debug=${debug} namespace=${namespace} tillerNamespace=${tillerNamespace} \
   chartFolder=${chartFolder} manifestFolder=${manifestFolder} alwaysPullImage=${alwaysPullImage}"
@@ -131,9 +126,50 @@ def call(body) {
             }
           }
         }
+        
         if (fileExists('Dockerfile')) {
+          if (fileExists('Package.swift')) {          
+            echo "Detected Swift project with a Dockerfile..."
+          
+            echo "Checking for runtime image..."
+            // Remember that grep returns 0 if it's there, 1 if not
+            
+            def containsRuntimeImage = sh(returnStatus: true, script: "grep 'ibmcom/swift-ubuntu-runtime' Dockerfile")        
+            echo "containsRuntimeImage: ${containsRuntimeImage}"
+            
+            echo "Checking for a build command..."
+            def containsBuildCommand = sh(returnStatus: true, script: "grep 'swift build' Dockerfile")
+            echo "containsBuildCommand: ${containsBuildCommand}"
+            
+            echo "Checking for microclimate.override=false..."          
+            // Don't do anything with the Dockerfile if we detect this string
+            def hasOverride = sh(returnStatus: true, script: "grep 'microclimate.override=false' Dockerfile")
+            echo "hasOverride: ${hasOverride}"
+          
+            // 0 = true, 1 = false! Would be good to use .toBoolean and make this easier to read
+            // Modify if there's a runtime image in the FROM, there's no swift build command, there's no override=false
+            if (containsRuntimeImage == 0 && containsBuildCommand == 1 && hasOverride == 1) {              
+              echo "Modifying the Dockerfile as the Microclimate pipeline has detected the swift-ubuntu-runtime image and no presence of a swift build command in the Dockerfile! Disable this behaviour with microclimate.override=false anywhere in your Dockerfile"                            
+              // Use the dev image so we can build
+              sh "sed -i 's|FROM ibmcom/swift-ubuntu-runtime|FROM ibmcom/swift-ubuntu|g' Dockerfile"              
+              // Add the build command after "COPY . /swift-project"
+              sh "sed -i '\\/COPY . \\/swift-project/a RUN cd \\/swift-project && swift build -c release' Dockerfile"
+              // Just run the project they've built: replace their cmd with a simpler one
+              sh "sed -i 's|cd /swift-project \\&\\& .build-ubuntu/release.*|cd /swift-project \\&\\& swift run\" ]|g' Dockerfile"
+              
+              def fileContents = sh(returnStdout: true, script: "cat Dockerfile")
+              print "Modified Dockerfile is as follows..."
+              print "${fileContents}"       
+            }
+          }
+          
           stage ('Docker Build') {
             container ('docker') {
+              
+              echo "Printing docker version..."
+              def docker_version = sh(returnStdout: true, script: "docker version")
+              echo "Docker version is ${docker_version}"             
+              
               imageTag = gitCommit
               def buildCommand = "docker build -t ${image}:${imageTag} "
               buildCommand += "--label org.label-schema.schema-version=\"1.0\" "
@@ -161,7 +197,8 @@ def call(body) {
                 sh "mkdir /home/jenkins/.docker"
                 sh "ln -s /msb_reg_sec/.dockerconfigjson /home/jenkins/.docker/config.json"
               }
-              sh buildCommand
+              sh buildCommand        
+              
               if (registry) {
                 sh "docker tag ${image}:${imageTag} ${registry}${image}:${imageTag}"
                 sh "docker push ${registry}${image}:${imageTag}"
@@ -318,7 +355,6 @@ def createNamespace(String namespace, String registrySecret) {
 /*
   We have a (temporary) namespace that we want to grant ICP registry access to.
   String namespace: target namespace
-
   1. Port registrySecret into a temporary namespace
   2. Modify 'default' serviceaccount to use ported registrySecret.
 */
