@@ -9,14 +9,14 @@
   }
   The following parameters may also be specified. Their defaults are shown below.
   These are the names of images to be downloaded from https://hub.docker.com/.
-  
+
     mavenImage = 'maven:3.5.2-jdk-8'
     dockerImage = 'ibmcom/docker:17.10'
     kubectlImage = 'ibmcom/k8s-kubectl:v1.8.3'
     helmImage = 'lachlanevenson/k8s-helm:v2.7.2'
-    
+
   You can also specify:
-  
+
     mvnCommands = 'clean package'
     build = 'true' - any value other than 'true' == false
     deploy = 'true' - any value other than 'true' == false
@@ -27,7 +27,7 @@
     namespace = 'targetNamespace' - deploys into Kubernetes targetNamespace.
       Default is to deploy into Jenkins' namespace.
     libertyLicenseJarName - override for Pipeline.LibertyLicenseJar.Name
-    
+
 -------------------------*/
 
 import com.cloudbees.groovy.cps.NonCPS
@@ -70,8 +70,8 @@ def call(body) {
   def libertyLicenseJarBaseUrl = (env.LIBERTY_LICENSE_JAR_BASE_URL ?: "").trim()
   def libertyLicenseJarName = config.libertyLicenseJarName ?: (env.LIBERTY_LICENSE_JAR_NAME ?: "").trim()
   def alwaysPullImage = (env.ALWAYS_PULL_IMAGE == null) ? true : env.ALWAYS_PULL_IMAGE.toBoolean()
-  def mavenSettingsConfigMap = env.MAVEN_SETTINGS_CONFIG_MAP?.trim() 
-  
+  def mavenSettingsConfigMap = env.MAVEN_SETTINGS_CONFIG_MAP?.trim()
+
   print "microserviceBuilderPipeline: registry=${registry} registrySecret=${registrySecret} build=${build} \
   deploy=${deploy} test=${test} debug=${debug} namespace=${namespace} tillerNamespace=${tillerNamespace} \
   chartFolder=${chartFolder} manifestFolder=${manifestFolder} alwaysPullImage=${alwaysPullImage}"
@@ -168,8 +168,7 @@ def call(body) {
           }
           
           stage ('Docker Build') {
-            container ('docker') {             
-              
+            container ('docker') {
               imageTag = gitCommit
               def buildCommand = "docker build -t ${image}:${imageTag} "
               buildCommand += "--label org.label-schema.schema-version=\"1.0\" "
@@ -197,7 +196,7 @@ def call(body) {
                 sh "mkdir /home/jenkins/.docker"
                 sh "ln -s /msb_reg_sec/.dockerconfigjson /home/jenkins/.docker/config.json"
               }
-              sh buildCommand              
+              sh buildCommand
               if (registry) {
                 sh "docker tag ${image}:${imageTag} ${registry}${image}:${imageTag}"
                 sh "docker push ${registry}${image}:${imageTag}"
@@ -354,7 +353,7 @@ def createNamespace(String namespace, String registrySecret) {
 /*
   We have a (temporary) namespace that we want to grant ICP registry access to.
   String namespace: target namespace
-  
+
   1. Port registrySecret into a temporary namespace
   2. Modify 'default' serviceaccount to use ported registrySecret.
 */
